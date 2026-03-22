@@ -44,7 +44,7 @@ export default function AuthPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
         <Image
           alt="Your Company"
-          src="/images/kageyama.PNG"
+          src="/images/frieren.jpg"
           className="mx-auto h-10 w-auto rounded-full border border-gray-300 shadow-sm"
           width={40}
           height={40}

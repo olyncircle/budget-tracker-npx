@@ -32,7 +32,7 @@ export default function Navbar() {
                         <div className="flex items-center space-x-3">
                             <Image
                                 alt="Your Company"
-                                src="/images/kageyama.PNG"
+                                src="/images/frieren.jpg"
                                 className="h-10 w-10 rounded-full border border-gray-300 shadow-sm"
                                 width={40}
                                 height={40}
@@ -76,7 +76,7 @@ export default function Navbar() {
                                 <span className="sr-only">Open user menu</span>
                                 <Image
                                     alt=""
-                                    src="/images/kageyama.PNG"
+                                    src="/images/frieren2.jpg"
                                     className="size-8 rounded-full bg-gray-800 outline -outline-offset-1 outline-white/10"
                                     width={32}
                                     height={32}
