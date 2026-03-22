@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Bar, Pie } from "react-chartjs-2";
 import ChartDataLabels from "chartjs-plugin-datalabels";
+import { ChartOptions } from "chart.js";
+
 import {
   Chart as ChartJS,
   ArcElement,
@@ -15,6 +17,44 @@ import {
 } from "chart.js";
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, ChartDataLabels);
+
+const barOptions: ChartOptions<"bar"> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      labels: {
+        color: "#fff", // legend text color
+        font: {
+          size: 14,
+          weight: "bold",
+        },
+      },
+    },
+    tooltip: {
+      titleColor: "#fff", // tooltip title text
+      bodyColor: "#fff",  // tooltip body text
+    },
+  },
+  scales: {
+    x: {
+      ticks: {
+        color: "#fff", // x-axis labels
+      },
+      grid: {
+        color: "rgba(255,255,255,0.2)", // x-axis grid lines
+      },
+    },
+    y: {
+      ticks: {
+        color: "#fff", // y-axis labels
+      },
+      grid: {
+        color: "rgba(255,255,255,0.2)", // y-axis grid lines
+      },
+    },
+  },
+};
 
 type Category = {
   id: string;
@@ -114,28 +154,86 @@ export default function Dashboard() {
     }
   });
 
-  // 🔹 Chart Data
-  const barData = {
-    labels: budgets.map((b) => {
-      if (Array.isArray(b.categories)) {
-        return b.categories[0]?.name ?? "Unknown";
-      }
-      return b.categories?.name ?? "Unknown";
-    }),
+  // 🔹 Prepare data for Needs Bar Chart
+  const needsBudgets = budgets.filter(
+    (b): b is Budget & { categories: Category } =>
+      b.categories !== undefined &&
+      !Array.isArray(b.categories) &&
+      b.categories.type === "needs"
+  );
+
+  const barDataNeeds = {
+    labels: needsBudgets.map((b) => b.categories.name ?? "Unknown"),
     datasets: [
       {
         label: "Expected",
-        data: budgets.map((b) => b.expected_amount),
-        backgroundColor: "rgba(54, 162, 235, 0.6)",
+        data: needsBudgets.map((b) => b.expected_amount),
+        backgroundColor: "rgba(54, 162, 235, 0.9)",
       },
       {
         label: "Actual",
-        data: budgets.map((b) =>
+        data: needsBudgets.map((b) =>
           transactions
             .filter((t) => t.category_id === b.category_id)
             .reduce((sum, t) => sum + t.amount, 0)
         ),
-        backgroundColor: "rgba(255, 99, 132, 0.6)",
+        backgroundColor: "rgba(255, 99, 132, 0.9)",
+      },
+    ],
+  };
+
+  // 🔹 Prepare data for Wants Bar Chart
+  const wantsBudgets = budgets.filter(
+    (b): b is Budget & { categories: Category } =>
+      b.categories !== undefined &&
+      !Array.isArray(b.categories) &&
+      b.categories.type === "wants"
+  );
+
+  const barDataWants = {
+    labels: wantsBudgets.map((b) => b.categories.name ?? "Unknown"),
+    datasets: [
+      {
+        label: "Expected",
+        data: wantsBudgets.map((b) => b.expected_amount),
+        backgroundColor: "rgba(54, 162, 235, 0.9)",
+      },
+      {
+        label: "Actual",
+        data: wantsBudgets.map((b) =>
+          transactions
+            .filter((t) => t.category_id === b.category_id)
+            .reduce((sum, t) => sum + t.amount, 0)
+        ),
+        backgroundColor: "rgba(255, 99, 132, 0.9)",
+      },
+    ],
+  };
+
+  // 🔹 Prepare data for Savings Bar Chart
+  const savingsBudgets = budgets.filter(
+    (b): b is Budget & { categories: Category } =>
+      b.categories !== undefined &&
+      !Array.isArray(b.categories) &&
+      b.categories.type === "savings"
+  );
+
+  const barDataSavings = {
+    labels: savingsBudgets.map((b) => b.categories.name ?? "Unknown"),
+    datasets: [
+      {
+        label: "Expected",
+        data: savingsBudgets.map((b) => b.expected_amount),
+        backgroundColor: "rgba(54, 162, 235, 0.9)",
+      },
+      {
+        label: "Actual",
+        data: savingsBudgets.map((b) =>
+          transactions
+            .filter((t) => t.category_id === b.category_id)
+            .reduce((sum, t) => sum + t.amount, 0)
+        ),
+        backgroundColor: "rgba(255, 99, 132, 0.9)",
       },
     ],
   };
@@ -151,16 +249,16 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-4 p-4 bg-gray-50">
-      <h2 className="text-xl font-semibold">Dashboard</h2>
+    <div className="p-6 bg-sky-950 min-h-screen text-white space-y-8">
+      <h2 className="text-2xl font-bold tracking-wide">Dashboard</h2>
 
       {/* Month Selector */}
-      <div className="mb-4">
-        <label className="text-sm font-medium mr-2">Select Month:</label>
+      <div className="flex items-center justify-between bg-sky-900 p-4 rounded-lg shadow-md">
+        <label className="text-sm font-semibold">Select Month:</label>
         <select
           value={selectedMonthId ?? ""}
           onChange={(e) => setSelectedMonthId(e.target.value)}
-          className="border rounded p-1 text-sm"
+          className="rounded-md bg-sky-800 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-400"
         >
           {months.map((m) => (
             <option key={m.id} value={m.id}>
@@ -171,56 +269,77 @@ export default function Dashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-2 text-sm">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {(["needs", "wants", "savings"] as const).map((type) => (
-          <div key={type} className="bg-white shadow rounded p-2">
-            <h3 className="font-medium capitalize">{type}</h3>
-            <p>Expected: ₱{totals[type].expected.toFixed(0)}</p>
-            <p>Actual: ₱{totals[type].actual.toFixed(0)}</p>
+          <div
+            key={type}
+            className="bg-sky-900 rounded-lg shadow-lg p-5 border border-sky-700 hover:scale-105 transition-transform"
+          >
+            <h3 className="text-lg font-semibold capitalize text-sky-100">{type}</h3>
+            <p className="text-sm text-sky-200 mt-2">
+              Expected: <span className="font-bold text-green-400">₱{totals[type].expected.toFixed(0)}</span>
+            </p>
+            <p className="text-sm text-sky-200">
+              Actual: <span className="font-bold text-pink-400">₱{totals[type].actual.toFixed(0)}</span>
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Charts */}
-      <div className="bg-white shadow rounded p-4">
-        <h3 className="text-sm font-medium mb-2">Expected vs Actual</h3>
-        <div className="h-48 w-full"> {/* smaller height */}
+      {/* Bar Chart for Needs */}
+      <div className="bg-sky-900 rounded-lg shadow-lg p-6">
+        <h3 className="text-base font-semibold mb-3 text-sky-00">Expected vs Actual (Needs)</h3>
+        <div className="h-64 w-full">
           <Bar
-            data={barData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-            }}
+            data={barDataNeeds}
+            options={barOptions} />
+        </div>
+      </div>
+
+      {/* Bar Chart for Wants */}
+      <div className="bg-sky-900 rounded-lg shadow-lg p-6">
+        <h3 className="text-base font-semibold mb-3 text-sky-00">Expected vs Actual (Wants)</h3>
+        <div className="h-64 w-full">
+          <Bar
+            data={barDataWants}
+            options={barOptions}
           />
         </div>
       </div>
 
-      <div className="h-48 w-full flex justify-center">
-        <Pie
-          data={pieData}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "bottom",
-              },
-              datalabels: {
-                color: "#fff",
-                font: {
-                  weight: "bold",
-                  size: 12,
+      {/* Bar Chart for Savings */}
+      <div className="bg-sky-900 rounded-lg shadow-lg p-6">
+        <h3 className="text-base font-semibold mb-3 text-sky-00">Expected vs Actual (Savings)</h3>
+        <div className="h-64 w-full">
+          <Bar data={barDataSavings} options={barOptions} />
+        </div>
+      </div>
+
+      {/* Pie Chart */}
+      <div className="bg-sky-900 rounded-lg shadow-lg p-6">
+        <h3 className="text-base font-semibold mb-3 text-sky-100">Spending Breakdown</h3>
+        <div className="h-64 w-full flex justify-center">
+          <Pie
+            data={pieData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: "bottom", labels: { color: "#fff" } },
+                datalabels: {
+                  color: "#fff",
+                  font: { weight: "bold", size: 12 },
+                  formatter: (value: number, context) => {
+                    const data = context.chart.data.datasets[0].data as number[];
+                    const total = data.reduce((a, b) => a + b, 0);
+                    const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
+                    return `${percentage}%`;
+                  },
                 },
-                formatter: (value: number, context) => {
-                  const data = context.chart.data.datasets[0].data as number[];
-                  const total = data.reduce((a, b) => a + b, 0);
-                  const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
-                  return `${percentage}%`;
-                },
               },
-            },
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
     </div>
   );
