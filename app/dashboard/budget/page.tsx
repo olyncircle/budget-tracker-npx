@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import toast from "react-hot-toast";
 
 type Category = {
   id: string;
@@ -21,8 +23,10 @@ type Month = {
   month: string;
 };
 
-export default function BudgetsPage() {
+export default function BudgetsPageLogic() {
   const supabase = createClient();
+
+  // State
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [months, setMonths] = useState<Month[]>([]);
@@ -30,7 +34,16 @@ export default function BudgetsPage() {
   const [form, setForm] = useState({ category_id: "", expected_amount: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // 🔹 Fetch categories + months
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  // Derived values
+  const totalPages = Math.ceil(budgets.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentItems = budgets.slice(startIndex, startIndex + itemsPerPage);
+
+  // Fetch categories + months
   useEffect(() => {
     const fetchData = async () => {
       const user = await supabase.auth.getUser();
@@ -55,7 +68,7 @@ export default function BudgetsPage() {
     fetchData();
   }, [supabase]);
 
-  // 🔹 Fetch budgets when month changes
+  // Fetch budgets when month changes
   useEffect(() => {
     const fetchBudgets = async () => {
       if (!selectedMonthId) return;
@@ -64,22 +77,24 @@ export default function BudgetsPage() {
         .select("id, category_id, expected_amount, categories(id, name, type)")
         .eq("month_id", selectedMonthId);
       setBudgets(data ?? []);
+      setCurrentPage(1); // reset pagination
     };
     fetchBudgets();
   }, [selectedMonthId, supabase]);
 
+  // Form change handler
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm({ ...form, [e.target.name]: e.target.value ?? "" });
   };
 
-  // 🔹 Add or Update
+  // Add or Update
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const user = await supabase.auth.getUser();
     const userId = user.data.user?.id;
-    if (!userId || !selectedMonthId) return alert("Not logged in");
+    if (!userId || !selectedMonthId) return toast.error("Not logged in");
 
     if (editingId) {
       const { error } = await supabase
@@ -92,10 +107,9 @@ export default function BudgetsPage() {
         .eq("user_id", userId);
 
       if (error) {
-        console.error(error);
-        alert("Error updating budget");
+        toast.error(error.message);
       } else {
-        alert("Budget updated!");
+        toast.success("Budget updated!");
         setEditingId(null);
       }
     } else {
@@ -109,10 +123,9 @@ export default function BudgetsPage() {
       ]);
 
       if (error) {
-        console.error(error);
-        alert("Error adding budget");
+        toast.error(error.message);
       } else {
-        alert("Budget added!");
+        toast.success("Budget added!");
       }
     }
 
@@ -125,38 +138,37 @@ export default function BudgetsPage() {
     setBudgets(data ?? []);
   };
 
-  // 🔹 Edit
+  // Edit
   const handleEdit = (b: Budget) => {
     setForm({
-      category_id: b.category_id,
-      expected_amount: b.expected_amount.toString(),
+      category_id: b.category_id ?? "",
+      expected_amount: b.expected_amount?.toString() ?? "",
     });
     setEditingId(b.id);
   };
 
-  // 🔹 Delete
+  // Delete
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("budgets").delete().eq("id", id);
     if (error) {
-      console.error(error);
-      alert("Error deleting budget");
+      toast.error(error.message);
     } else {
-      alert("Budget deleted!");
+      toast.success("Budget deleted!");
       setBudgets(budgets.filter((b) => b.id !== id));
     }
   };
 
   return (
-    <div className="p-4 bg-gray-50 space-y-4">
-      <h2 className="text-xl font-semibold">Budgets</h2>
+    <div className="p-6 bg-sky-950 min-h-screen text-white space-y-6">
+      <h2 className="text-2xl font-bold tracking-wide">Budgets</h2>
 
       {/* Month Selector */}
-      <div>
-        <label className="text-sm font-medium mr-2">Select Month:</label>
+      <div className="flex items-center gap-2">
+        <label className="text-sm font-medium">Select Month:</label>
         <select
           value={selectedMonthId ?? ""}
           onChange={(e) => setSelectedMonthId(e.target.value)}
-          className="border rounded p-1 text-sm"
+          className="rounded-md bg-sky-900 px-3 py-1 text-sm text-white focus:ring-2 focus:ring-sky-500"
         >
           {months.map((m) => (
             <option key={m.id} value={m.id}>
@@ -169,13 +181,13 @@ export default function BudgetsPage() {
       {/* Form */}
       <form
         onSubmit={handleSubmit}
-        className="flex flex-wrap gap-2 items-center bg-white p-2 shadow rounded"
+        className="flex flex-wrap gap-3 items-center bg-sky-900 p-4 rounded-lg shadow-md"
       >
         <select
           name="category_id"
-          value={form.category_id}
+          value={form.category_id ?? ""}
           onChange={handleChange}
-          className="border rounded p-1 text-sm"
+          className="rounded-md bg-sky-950 px-3 py-2 text-sm text-white"
           required
         >
           <option value="">Category</option>
@@ -188,69 +200,132 @@ export default function BudgetsPage() {
         <input
           type="number"
           name="expected_amount"
-          value={form.expected_amount}
+          value={form.expected_amount ?? ""}
           onChange={handleChange}
           placeholder="Expected Amount"
-          className="border rounded p-1 text-sm w-32"
+          className="rounded-md bg-sky-950 px-3 py-2 text-sm text-white"
           required
         />
         <button
           type="submit"
-          className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+          className="bg-teal-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-teal-500 focus:ring-2 focus:ring-teal-400"
         >
           {editingId ? "Update" : "Add"}
         </button>
       </form>
 
-      {/* Budgets List */}
-      <div className="bg-white shadow rounded">
+      {/* Budgets Table */}
+      <div className="overflow-x-auto bg-sky-900 rounded-lg shadow-md">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-100 text-gray-700">
+          <thead className="bg-sky-800 text-gray-200">
             <tr>
-              <th className="px-3 py-2 text-left">Category</th>
-              <th className="px-3 py-2 text-right">Expected Amount</th>
-              <th className="px-3 py-2 text-right">Actions</th>
+              <th className="px-4 py-2 text-left">Category</th>
+              <th className="px-4 py-2 text-left">Category Type</th>
+              <th className="px-4 py-2 text-right">Expected Amount</th>
+              <th className="px-4 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {budgets.length === 0 ? (
+            {currentItems.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-3 py-4 text-center text-gray-500">
                   No budgets yet
                 </td>
               </tr>
             ) : (
-              budgets.map((b) => (
-                <tr key={b.id} className="border-t">
+              currentItems.map((b) => (
+                <tr
+                  key={b.id}
+                  className="border-t border-sky-700 hover:bg-sky-800 transition-colors"
+                >
+                  {/* Category Name */}
                   <td className="px-3 py-2">
-                    {Array.isArray(b.categories) ? b.categories[0]?.name ?? "No category" : b.categories?.name ?? "No category"}
-                    <span className="text-xs text-gray-500">
-                      ({Array.isArray(b.categories) ? b.categories[0]?.type : b.categories?.type})
-                    </span>
+                    {Array.isArray(b.categories)
+                      ? b.categories[0]?.name ?? "No category"
+                      : b.categories?.name ?? "No category"}
                   </td>
-                  <td className="px-3 py-2 text-right">
+
+                  {/* Category Type */}
+                  <td className="px-3 py-2 text-gray-400">
+                    {Array.isArray(b.categories)
+                      ? b.categories[0]?.type ?? "No type"
+                      : b.categories?.type ?? "No type"}
+                  </td>
+
+                  {/* Expected Amount */}
+                  <td className="px-4 py-2 text-right">
                     ₱{b.expected_amount.toFixed(2)}
                   </td>
-                  <td className="px-3 py-2 text-right space-x-2">
-                    <button
-                      onClick={() => handleEdit(b)}
-                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(b.id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                    >
-                      Delete
-                    </button>
+
+                  {/* Actions */}
+                  <td className="px-4 py-2 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(b)}
+                        className="w-9 h-9 flex items-center justify-center rounded-md bg-amber-600 text-white hover:bg-amber-500 focus:ring-2 focus:ring-amber-400"
+                      >
+                        <PencilIcon className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(b.id)}
+                        className="w-9 h-9 flex items-center justify-center rounded-md bg-slate-600 text-white hover:bg-slate-500 focus:ring-2 focus:ring-slate-400"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+
+        {/* Pagination Controls */}
+        <div className="flex justify-center items-center gap-2 p-4">
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+            className="px-3 py-1 rounded-md bg-sky-600 text-white disabled:opacity-50 hover:bg-sky-700"
+          >
+            前
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`px-3 py-1 rounded-md ${currentPage === i + 1
+                ? "bg-sky-500 text-white"
+                : "bg-sky-800 text-gray-200 hover:bg-sky-700"
+                }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+            className="px-3 py-1 rounded-md bg-sky-600 text-white disabled:opacity-50 hover:bg-sky-700"
+          >
+            次
+          </button>
+        </div>
       </div>
+
+      {/* Floating Add Button */}
+      {/* <div className="flex justify-end p-4">
+        <button
+          type="button"
+          onClick={() => alert("Add new budget")}
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-sky-600 text-white hover:bg-sky-500 focus:ring-2 focus:ring-green-400"
+        >
+          <PlusIcon className="h-5 w-5" />
+        </button>
+      </div> */}
     </div>
   );
 }
+

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import toast from "react-hot-toast";
 
 type Category = {
   id: string;
@@ -18,26 +20,32 @@ type Transaction = {
   categories?: Category | Category[];
 };
 
-export default function TransactionsPage() {
+export default function TransactionsPageLogic() {
   const supabase = createClient();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState({
-    date: "",
+    date: new Date().toISOString().split("T")[0], // YYYY-MM-DD format
     amount: "",
     category_id: "",
     note: "",
   });
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // 🔹 Fetch transactions + categories
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+  const totalPages = Math.ceil(transactions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentItems = transactions.slice(startIndex, startIndex + itemsPerPage);
+
+  // Fetch transactions + categories
   useEffect(() => {
     const fetchData = async () => {
       const user = await supabase.auth.getUser();
       const userId = user.data.user?.id;
       if (!userId) return;
 
-      // Get current month
       const currentMonth = new Date().toLocaleString("default", {
         month: "long",
         year: "numeric",
@@ -62,25 +70,27 @@ export default function TransactionsPage() {
 
       const { data: catData } = await supabase.from("categories").select("*");
       setCategories(catData ?? []);
+      setCurrentPage(1);
     };
 
     fetchData();
   }, [supabase]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
   ) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // 🔹 Add or Update transaction
+  // Add or Update transaction
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const user = await supabase.auth.getUser();
     const userId = user.data.user?.id;
-    if (!userId) return alert("Not logged in");
+    if (!userId) return toast.error("Not logged in");
 
-    // Ensure month exists
     const currentMonth = new Date().toLocaleString("default", {
       month: "long",
       year: "numeric",
@@ -95,7 +105,6 @@ export default function TransactionsPage() {
     if (!month) return;
 
     if (editingId) {
-      // Update
       const { error } = await supabase
         .from("transactions")
         .update({
@@ -107,15 +116,12 @@ export default function TransactionsPage() {
         .eq("id", editingId)
         .eq("user_id", userId);
 
-      if (error) {
-        console.error(error);
-        alert("Error updating transaction");
-      } else {
-        alert("Transaction updated!");
+      if (error) toast.error(error.message);
+      else {
+        toast.success("Transaction updated!");
         setEditingId(null);
       }
     } else {
-      // Insert
       const { error } = await supabase.from("transactions").insert([
         {
           user_id: userId,
@@ -127,17 +133,12 @@ export default function TransactionsPage() {
         },
       ]);
 
-      if (error) {
-        console.error(error);
-        alert("Error adding transaction");
-      } else {
-        alert("Transaction added!");
-      }
+      if (error) toast.error(error.message);
+      else toast.success("Transaction added!");
     }
 
-    setForm({ date: "", amount: "", category_id: "", note: "" });
+    setForm({ date: new Date().toISOString().split("T")[0], amount: "", category_id: "", note: "" });
 
-    // Refresh list
     const { data: txData } = await supabase
       .from("transactions")
       .select("id, date, amount, note, category_id, categories(id, name, type)")
@@ -147,7 +148,7 @@ export default function TransactionsPage() {
     setTransactions(txData ?? []);
   };
 
-  // 🔹 Edit
+  // Edit
   const handleEdit = (tx: Transaction) => {
     setForm({
       date: tx.date,
@@ -158,34 +159,31 @@ export default function TransactionsPage() {
     setEditingId(tx.id);
   };
 
-  // 🔹 Delete
+  // Delete
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("transactions").delete().eq("id", id);
-    if (error) {
-      console.error(error);
-      alert("Error deleting transaction");
-    } else {
-      alert("Transaction deleted!");
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Transaction deleted!");
       setTransactions(transactions.filter((t) => t.id !== id));
     }
   };
 
   return (
-    <div className="p-4 bg-gray-50 space-y-4">
-      <h2 className="text-xl font-semibold">Transactions</h2>
+    <div className="p-6 bg-sky-950 min-h-screen text-white space-y-6">
+      <h2 className="text-2xl font-bold tracking-wide">Transactions</h2>
 
       {/* Form */}
       <form
         onSubmit={handleSubmit}
-        className="flex flex-wrap gap-2 items-center bg-white p-2 shadow rounded"
+        className="flex flex-wrap gap-3 items-center bg-sky-900 p-4 rounded-lg shadow-md"
       >
         <input
           type="date"
           name="date"
           value={form.date}
           onChange={handleChange}
-          className="border rounded p-1 text-sm"
-          required
+          className="rounded-md bg-sky-950 px-3 py-2 text-sm text-white"
         />
         <input
           type="number"
@@ -193,15 +191,13 @@ export default function TransactionsPage() {
           value={form.amount}
           onChange={handleChange}
           placeholder="Amount"
-          className="border rounded p-1 text-sm w-24"
-          required
+          className="rounded-md bg-sky-950 px-3 py-2 text-sm text-white w-28"
         />
         <select
           name="category_id"
           value={form.category_id}
           onChange={handleChange}
-          className="border rounded p-1 text-sm"
-          required
+          className="rounded-md bg-sky-950 px-3 py-2 text-sm text-white"
         >
           <option value="">Category</option>
           {categories.map((c) => (
@@ -216,66 +212,115 @@ export default function TransactionsPage() {
           value={form.note}
           onChange={handleChange}
           placeholder="Note"
-          className="border rounded p-1 text-sm flex-1"
+          className="rounded-md bg-sky-950 px-3 py-2 text-sm text-white flex-1"
         />
         <button
           type="submit"
-          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+          className="bg-teal-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-teal-500 focus:ring-2 focus:ring-teal-400"
         >
           {editingId ? "Update" : "Add"}
         </button>
       </form>
 
-      {/* Transactions List */}
-      <div className="bg-white shadow rounded">
+      {/* Transactions Table */}
+      <div className="overflow-x-auto bg-sky-900 rounded-lg shadow-md">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-100 text-gray-700">
+          <thead className="bg-sky-800 text-gray-200">
             <tr>
               <th className="px-3 py-2 text-left">Date</th>
               <th className="px-3 py-2 text-left">Category</th>
+              <th className="px-3 py-2 text-left">Type</th>
               <th className="px-3 py-2 text-right">Amount</th>
               <th className="px-3 py-2 text-left">Note</th>
               <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {transactions.length === 0 ? (
+            {currentItems.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
+                <td colSpan={6} className="px-3 py-4 text-center text-gray-500">
                   No transactions yet
                 </td>
               </tr>
             ) : (
-              transactions.map((t) => (
-                <tr key={t.id} className="border-t">
+              currentItems.map((t) => (
+                <tr
+                  key={t.id}
+                  className="border-t border-sky-700 hover:bg-sky-800 transition-colors"
+                >
                   <td className="px-3 py-2">{t.date}</td>
                   <td className="px-3 py-2">
-                    {Array.isArray(t.categories) ? t.categories[0]?.name : t.categories?.name}{" "}
-                    <span className="text-xs text-gray-500">
-                      ({Array.isArray(t.categories) ? t.categories[0]?.type : t.categories?.type})
-                    </span>
+                    {Array.isArray(t.categories)
+                      ? t.categories[0]?.name
+                      : t.categories?.name}
                   </td>
-                  <td className="px-3 py-2 text-right">₱{t.amount.toFixed(2)}</td>
+                  <td className="px-3 py-2 capitalize text-gray-300">
+                    {Array.isArray(t.categories)
+                      ? t.categories[0]?.type
+                      : t.categories?.type}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    ₱{t.amount.toFixed(2)}
+                  </td>
                   <td className="px-3 py-2">{t.note ?? "-"}</td>
-                  <td className="px-3 py-2 text-right space-x-2">
-                    <button
-                      onClick={() => handleEdit(t)}
-                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(t.id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-                    >
-                      Delete
-                    </button>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex justify-end gap-2">
+                      {/* Edit Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(t)}
+                        className="w-9 h-9 flex items-center justify-center rounded-md bg-amber-600 text-white hover:bg-amber-500 focus:ring-2 focus:ring-amber-400"
+                      >
+                        <PencilIcon className="h-5 w-5" />
+                      </button>
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(t.id)}
+                        className="w-9 h-9 flex items-center justify-center rounded-md bg-slate-600 text-white hover:bg-slate-500 focus:ring-2 focus:ring-slate-400"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+
+        {/* Pagination Controls */}
+        <div className="flex justify-center items-center gap-2 p-4">
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+            className="px-3 py-1 rounded-md bg-sky-600 text-white disabled:opacity-50"
+          >
+            前
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`px-3 py-1 rounded-md ${currentPage === i + 1
+                ? "bg-sky-500 text-white"
+                : "bg-sky-800 text-gray-200 hover:bg-sky-700"
+                }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+            className="px-3 py-1 rounded-md bg-sky-600 text-white disabled:opacity-50"
+          >
+            次
+          </button>
+        </div>
       </div>
     </div>
   );
