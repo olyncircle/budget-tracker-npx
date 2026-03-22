@@ -33,6 +33,7 @@ export default function BudgetsPageLogic() {
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
   const [form, setForm] = useState({ category_id: "", expected_amount: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [newMonthName, setNewMonthName] = useState("");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -161,21 +162,65 @@ export default function BudgetsPageLogic() {
   return (
     <div className="p-6 bg-sky-950 min-h-screen text-white space-y-6">
       <h2 className="text-2xl font-bold tracking-wide">Budgets</h2>
+      {/* Month Selector + Add Month Form inline */}
+      <div className="flex flex-wrap items-center justify-between bg-blue-900 p-3 rounded-lg shadow-md gap-4">
+        {/* Left: Month Selector */}
+        <div className="flex items-center gap-2 shrink-0">
+          <label className="text-sm font-semibold text-white">Select Month:</label>
+          <select
+            value={selectedMonthId ?? ""}
+            onChange={(e) => setSelectedMonthId(e.target.value)}
+            className="rounded-md bg-blue-950 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500"
+          >
+            {months.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.month}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Month Selector */}
-      <div className="flex items-center gap-2">
-        <label className="text-sm font-medium">Select Month:</label>
-        <select
-          value={selectedMonthId ?? ""}
-          onChange={(e) => setSelectedMonthId(e.target.value)}
-          className="rounded-md bg-sky-900 px-3 py-1 text-sm text-white focus:ring-2 focus:ring-sky-500"
+        {/* Right: Add Month Form */}
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const user = await supabase.auth.getUser();
+            const userId = user.data.user?.id;
+            if (!userId) return toast.error("Not logged in");
+
+            if (!newMonthName.trim()) return toast.error("Enter a month name");
+
+            const { data, error } = await supabase
+              .from("months")
+              .insert([{ user_id: userId, month: newMonthName }])
+              .select()
+              .single();
+
+            if (error) {
+              toast.error(error.message);
+            } else {
+              toast.success(`${newMonthName} created!`);
+              setMonths((prev) => [data, ...prev]);
+              setSelectedMonthId(data.id);
+              setNewMonthName("");
+            }
+          }}
+          className="flex items-center gap-2 shrink-0"
         >
-          {months.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.month}
-            </option>
-          ))}
-        </select>
+          <input
+            type="text"
+            value={newMonthName}
+            onChange={(e) => setNewMonthName(e.target.value)}
+            placeholder="e.g. April 2026"
+            className="rounded-md bg-blue-950 px-3 py-2 text-sm text-white w-40"
+          />
+          <button
+            type="submit"
+            className="bg-sky-600 text-white px-3 py-2 rounded-md text-sm font-semibold hover:bg-sky-500 focus:ring-2 focus:ring-sky-400 whitespace-nowrap"
+          >
+            + Add Month
+          </button>
+        </form>
       </div>
 
       {/* Form */}
