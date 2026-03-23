@@ -24,8 +24,11 @@ export default function TransactionsPageLogic() {
   const supabase = createClient();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const today = new Date();
+  const localDate = today.toLocaleDateString("en-CA"); // YYYY-MM-DD format
+
   const [form, setForm] = useState({
-    date: new Date().toISOString().split("T")[0], // YYYY-MM-DD format
+    date: localDate,
     amount: "",
     category_id: "",
     note: "",
@@ -60,12 +63,22 @@ export default function TransactionsPageLogic() {
 
       if (!month) return;
 
-      const { data: txData } = await supabase
+      const { data: txData, error: txError } = await supabase
         .from("transactions")
-        .select("id, date, amount, note, category_id, categories(id, name, type)")
+        .select(`
+            id,
+            date,
+            amount,
+            note,
+            category_id,
+            categories!transactions_category_id_fkey (id, name, type)
+          `)
         .eq("month_id", month.id)
-        .order("date", { ascending: true });
+        .order("created_at", { ascending: false }); // newest first
 
+      if (txError) {
+        toast.error(txError.message);
+      }
       setTransactions((txData ?? []) as Transaction[]);
 
       const { data: catData } = await supabase.from("categories").select("*");
@@ -137,15 +150,24 @@ export default function TransactionsPageLogic() {
       else toast.success("Transaction added!");
     }
 
-    setForm({ date: new Date().toISOString().split("T")[0], amount: "", category_id: "", note: "" });
+    setForm({ date: localDate, amount: "", category_id: "", note: "" });
 
-    const { data: txData } = await supabase
+    const { data: txData, error: txError } = await supabase
       .from("transactions")
-      .select("id, date, amount, note, category_id, categories(id, name, type)")
+      .select(`
+            id,
+            date,
+            amount,
+            note,
+            category_id,
+            categories!transactions_category_id_fkey (id, name, type)
+          `)
       .eq("month_id", month.id)
-      .order("date", { ascending: true });
-
-    setTransactions(txData ?? []);
+      .order("created_at", { ascending: false }); // newest first
+    if (txError) {
+      toast.error(txError.message);
+    }
+    setTransactions((txData ?? []) as Transaction[]);
   };
 
   // Edit
