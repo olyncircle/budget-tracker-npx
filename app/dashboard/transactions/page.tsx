@@ -49,19 +49,28 @@ export default function TransactionsPageLogic() {
       const userId = user.data.user?.id;
       if (!userId) return;
 
-      const currentMonth = new Date().toLocaleString("default", {
+      const currentMonth = new Date().toLocaleString("en-US", {
         month: "long",
         year: "numeric",
       });
+      // "March 2026"
 
-      const { data: month } = await supabase
+      const { data: month, error: monthError } = await supabase
         .from("months")
         .select("id")
         .eq("user_id", userId)
         .eq("month", currentMonth)
-        .single();
+        .maybeSingle(); // safer than .single()
 
-      if (!month) return;
+      if (monthError) {
+        toast.error(monthError.message);
+        return;
+      }
+
+      if (!month) {
+        toast.error("No month record found for " + currentMonth);
+        return;
+      }
 
       const { data: txData, error: txError } = await supabase
         .from("transactions")
